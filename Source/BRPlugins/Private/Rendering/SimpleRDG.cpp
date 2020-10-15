@@ -1,20 +1,16 @@
 #include "Rendering/SimpleRDG.h"
+#include "Engine/TextureRenderTarget2D.h"
 
 #include "CommonRenderResources.h"
 #include "Containers/DynamicRHIResourceArray.h"
 #include "Engine/Engine.h"
-#include "GlobalShader.h"
 #include "PipelineStateCache.h"
 
-
+#include "GlobalShader.h"
 #include "RenderGraphUtils.h"
 #include "RenderTargetPool.h"
 #include "RHIStaticStates.h"
 #include "ShaderParameterUtils.h"
-
-
-
-#include "Engine/TextureRenderTarget2D.h"
 
 namespace SimpleRGD {
 
@@ -40,7 +36,8 @@ namespace SimpleRGD {
 
 		BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		//	SHADER_PARAMETER_STRUCT_REF(FUniformBufferParameters, UniformBufferParameters)
-			SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, OutTexture)
+			SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, OutTexture)
+			//RENDER_TARGET_BINDING_SLOTS()
 		END_SHADER_PARAMETER_STRUCT()
 
 		static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -187,42 +184,57 @@ namespace SimpleRGD {
 
 	}
 	*/
-	void Render(FRHICommandListImmediate& RHIImmCmdList, FRDGTextureRef InTexture, FRenderTarget* RenderTarget)
+	void RDGCompute(FRHICommandListImmediate& RHIImmCmdList, FRenderTarget* RenderTarget)
 	{
 		check(IsInRenderingThread());
 
-		//TRefCountPtr<FRHITexture2D>   RenderTarget为
+		FTexture2DRHIRef RenderTargetRHI = RenderTarget->GetRenderTargetTexture();
 
-		FRDGTextureRef GraphTexture = GraphBuilder.RegisterExternalTexture(GenMipsStruct->RenderTarget, TEXT("GenerateMipsGraphTexture"));
+		FSceneRenderTargetItem RenderTargetItem;
+		RenderTargetItem.TargetableTexture = RenderTargetRHI;
+		RenderTargetItem.ShaderResourceTexture = RenderTargetRHI;
+		FPooledRenderTargetDesc RenderTargetDesc = FPooledRenderTargetDesc::Create2DDesc(RenderTarget->GetSizeXY(),
+			RenderTargetRHI->GetFormat(), FClearValueBinding::Black, TexCreate_None, TexCreate_RenderTargetable |
+			TexCreate_ShaderResource | TexCreate_UAV, false);
+		TRefCountPtr<IPooledRenderTarget> PooledRenderTarget;
+		GRenderTargetPool.CreateUntrackedElement(RenderTargetDesc, PooledRenderTarget, RenderTargetItem);
 
 
-		//Begin rendergraph for executing the compute shader
+		//RenderGraph部分开始
 		FRDGBuilder GraphBuilder(RHIImmCmdList);
+		FRDGTextureRef DisplacementRenderTargetRDG = GraphBuilder.RegisterExternalTexture(PooledRenderTarget, TEXT("DisplacementRenderTarget"));
 
 		//设置变量与资源
 		FRDGComputerShader::FParameters* Parameters = GraphBuilder.AllocParameters<FRDGComputerShader::FParameters>();
 
-		FRDGTextureUAVDesc UAVDesc(GraphTexture);
-		Parameters->OutTexture = GraphBuilder->CreateUAV(UAVDesc);
+		FRDGTextureUAVDesc UAVDesc(DisplacementRenderTargetRDG);
+		Parameters->OutTexture = GraphBuilder.CreateUAV(UAVDesc);
+		//Parameters->RenderTargets[0] = FRenderTargetBinding(OutputTexture, ERenderTargetLoadAction::ENoAction);
 
 
-		//ClearUnusedGraphResources(ComputeShader, PassParameters);
-
-
-
+		//从GlobalShaderMap中取得ComputeShader
+		const ERHIFeatureLevel::Type FeatureLevel = GMaxRHIFeatureLevel;	//ERHIFeatureLevel::SM5
+		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(FeatureLevel);
+		TShaderMapRef<FRDGComputerShader> ComputeShader(GlobalShaderMap);
+		//确定ComputerShader线程数
+		FIntVector ThreadGroupCount(
+			RenderTarget->GetSizeXY().X / 16,
+			RenderTarget->GetSizeXY().Y / 16,
+			1);
+		
+		//如果有多个AddPass需要调用这个函数
+		ClearUnusedGraphResources(ComputeShader, Parameters);
 
 		GraphBuilder.AddPass(
-			RDG_EVENT_NAME("Generate2DTextureMips DestMipLevel=%d", MipLevel),
-			PassParameters,
-			ERDGPassFlags::Compute | ERDGPassFlags::GenerateMips,
-			[PassParameters, ComputeShader, GenMipsGroupCount](FRHICommandList& RHICmdList)
+			RDG_EVENT_NAME("SimpleRDG ComputerShader Dispatch"),
+			Parameters,
+			ERDGPassFlags::Compute | ERDGPassFlags::Compute,
+			[Parameters, ComputeShader,ThreadGroupCount](FRHICommandList& RHICmdList)
 			{
-				FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, *PassParameters, GenMipsGroupCount);
+				FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, *Parameters, ThreadGroupCount);
 			});
 
-
-
-		GraphBuilder.QueueTextureExtraction(GraphTexture, &GenMipsStruct->RenderTarget);
+		GraphBuilder.QueueTextureExtraction(DisplacementRenderTargetRDG, &PooledRenderTarget);
 		GraphBuilder.Execute();
 	}
 }
@@ -232,7 +244,13 @@ void USimplePixelShaderBlueprintLibrary::UseComputeShader(const UObject* WorldCo
 {
 	check(IsInGameThread());
 
-	FTextureRenderTargetResource* TextureRenderTargetResource = OutputRenderTarget->GameThread_GetRenderTargetResource();
+	FRenderTarget* RenderTargetResource = OutputRenderTarget->GameThread_GetRenderTargetResource();
 	const UWorld* World = WorldContextObject->GetWorld();
-	ERHIFeatureLevel::Type FeatureLevel = World->Scene->GetFeatureLevel();
+	//ERHIFeatureLevel::Type FeatureLevel = World->Scene->GetFeatureLevel();
+
+	ENQUEUE_RENDER_COMMAND(CaptureCommand)(
+		[RenderTargetResource](FRHICommandListImmediate& RHICmdList)
+		{
+			SimpleRGD::RDGCompute(RHICmdList,RenderTargetResource);
+		});
 }

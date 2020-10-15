@@ -3,7 +3,7 @@
  
 RWTexture2D<float4> OutTexture;  
   
-[numthreads(32, 32, 1)]
+[numthreads(16, 16, 1)]
 void MainCS(uint3 ThreadId : SV_DispatchThreadID)
 {
 	//Set up some variables we are going to need

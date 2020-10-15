@@ -1,7 +1,6 @@
 #pragma once
-
+//#include "Templates/RefCounting.h"
 #include "RenderGraph.h"
-#include "Templates/RefCounting.h"
 
 //BlueprintLibraryHeader
 #include "CoreMinimal.h"
@@ -14,16 +13,13 @@ struct IPooledRenderTarget;
 
 namespace SimpleRGD
 {
-	// Draw info from the debug print buffer to the given output target
-	void DrawView(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef OutputTexture);
-
-	void Render(FRHICommandListImmediate& RHIImmCmdList, FRDGTextureRef InTexture);
+	void RDGCompute(FRHICommandListImmediate& RHIImmCmdList, FRenderTarget* RenderTarget);
 }
 
 UCLASS(MinimalAPI, meta=(ScriptName="SimplePixelShaderTest"))
 class USimplePixelShaderBlueprintLibrary : public UBlueprintFunctionLibrary
 {
-	GENERATED_UCLASS_BODY()
+	GENERATED_BODY()
 
 	UFUNCTION(BlueprintCallable, Category = "SimplePixelShader", meta = (WorldContext = "WorldContextObject"))
 	static void UseComputeShader(const UObject* WorldContextObject, UTextureRenderTarget2D* OutputRenderTarget);
