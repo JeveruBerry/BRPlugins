@@ -14,17 +14,7 @@
 
 namespace SimpleRGD {
 
-	BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FUniformBufferParameters, )
-		SHADER_PARAMETER(FVector4, Color1)
-		SHADER_PARAMETER(FVector4, Color2)
-		SHADER_PARAMETER(FVector4, Color3)
-		SHADER_PARAMETER(FVector4, Color4)
-		SHADER_PARAMETER(uint32, ColorIndex)
-	END_GLOBAL_SHADER_PARAMETER_STRUCT()
-
-	IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FUniformBufferParameters, "ShaderPrintUniform");
-	typedef TUniformBufferRef<FUniformBufferParameters> FUniformBufferRef;
-
+	IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FBRUniformBufferParameters, "BRUniform");
 	/**
 	 * GlobalShader
 	 */
@@ -46,7 +36,7 @@ namespace SimpleRGD {
 		}
 	};
 
-	IMPLEMENT_GLOBAL_SHADER(FRDGComputerShader, "/Engine/Private/SimpleComputeShader.usf", "MainCS", SF_Compute);
+	IMPLEMENT_GLOBAL_SHADER(FRDGComputerShader, "/BRPlugins/Private/SimpleComputeShader.usf", "MainCS", SF_Compute);
 
 	// Shader for draw pass to render each symbol
 	class FRDGGlobalShader : public FGlobalShader
@@ -55,7 +45,7 @@ namespace SimpleRGD {
 		SHADER_USE_PARAMETER_STRUCT(FRDGGlobalShader, FGlobalShader);
 
 		BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-			SHADER_PARAMETER_STRUCT_REF(FUniformBufferParameters, UniformBufferParameters)
+			SHADER_PARAMETER_STRUCT_REF(FBRUniformBufferParameters, UniformBufferParameters)
 			SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, TextureUAV)
 			RENDER_TARGET_BINDING_SLOTS()
 		END_SHADER_PARAMETER_STRUCT()
@@ -79,7 +69,7 @@ namespace SimpleRGD {
 		{}
 	};
 
-	IMPLEMENT_GLOBAL_SHADER(FRDGVertexShader, "/Engine/Private/SimplePixelShader.usf", "MainVS", SF_Vertex);
+	IMPLEMENT_GLOBAL_SHADER(FRDGVertexShader, "/BRPlugins/Private/SimplePixelShader.usf", "MainVS", SF_Vertex);
 
 	class FRDGPixelShader : public FRDGGlobalShader
 	{
@@ -94,7 +84,7 @@ namespace SimpleRGD {
 		{}
 	};
 
-	IMPLEMENT_GLOBAL_SHADER(FRDGPixelShader, "/Engine/Private/SimplePixelShader.usf", "MainPS", SF_Pixel);
+	IMPLEMENT_GLOBAL_SHADER(FRDGPixelShader, "/BRPlugins/Private/SimplePixelShader.usf", "MainPS", SF_Pixel);
 	/*
 	void DrawView(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef OutputTexture)
 	{
@@ -197,7 +187,8 @@ namespace SimpleRGD {
 			RenderTargetRHI->GetFormat(), FClearValueBinding::Black, TexCreate_None, TexCreate_RenderTargetable |
 			TexCreate_ShaderResource | TexCreate_UAV, false);
 		TRefCountPtr<IPooledRenderTarget> PooledRenderTarget;
-		GRenderTargetPool.CreateUntrackedElement(RenderTargetDesc, PooledRenderTarget, RenderTargetItem);
+		//GRenderTargetPool.CreateUntrackedElement(RenderTargetDesc, PooledRenderTarget, RenderTargetItem);
+		GRenderTargetPool.FindFreeElement(RHIImmCmdList, RenderTargetDesc, PooledRenderTarget, TEXT("DisplacementRenderTarget"));
 
 
 		//RenderGraph部分开始
@@ -223,7 +214,7 @@ namespace SimpleRGD {
 			1);
 		
 		//如果有多个AddPass需要调用这个函数
-		ClearUnusedGraphResources(ComputeShader, Parameters);
+		//ClearUnusedGraphResources(ComputeShader, Parameters);
 
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("SimpleRDG ComputerShader Dispatch"),
@@ -236,6 +227,16 @@ namespace SimpleRGD {
 
 		GraphBuilder.QueueTextureExtraction(DisplacementRenderTargetRDG, &PooledRenderTarget);
 		GraphBuilder.Execute();
+
+		//FRHICopyTextureInfo CopyInfo;
+		//CopyInfo.NumMips = 1;
+		//RHIImmCmdList.CopyTexture(
+		//	DisplacementRenderTargetRDG->GetRHI(),
+		//	RenderTargetRHI->GetTexture2D(),
+		//	CopyInfo);
+		
+		//RHICmdList.CopyToResolveTarget(DisplacementRenderTargetRDG, DebugRenderTarget, FResolveParams());
+		
 	}
 }
 

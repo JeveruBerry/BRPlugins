@@ -31,7 +31,6 @@ public class BRPlugins : ModuleRules
 				"RHI",
 				"Engine",
 				"RenderCore",
-                "Renderer",
                 "AssetTools",
 				"Slate",
                 "SlateCore",

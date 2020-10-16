@@ -2,8 +2,6 @@
 #include "/Engine/Private/Common.ush"  
 
 float4 SimpleColor;
-Texture2D TextureVal;  
-SamplerState TextureSampler;
 void MainVS(
  in float4 InPosition : ATTRIBUTE0,
  in float2 InUV : ATTRIBUTE1,  
@@ -20,22 +18,5 @@ void MainPS(
     out float4 OutColor : SV_Target0
     )
 {
-    OutColor = float4(TextureVal.Sample(TextureSampler, UV.xy).rgb, 1.0f);  
-    //OutColor *= SimpleColor;
-	//OutColor*=SimpleUniformStruct.Color4;
-    switch (SimpleUniformStruct.ColorIndex)  
-    {  
-        case 0 :  
-            OutColor *= SimpleUniformStruct.Color1;  
-            break;  
-        case 1:  
-            OutColor *= SimpleUniformStruct.Color2;  
-            break;  
-        case 2:  
-            OutColor *= SimpleUniformStruct.Color3;  
-            break;  
-        case 3:  
-            OutColor *= SimpleUniformStruct.Color4;  
-            break;  
-    }  
+    OutColor = float4(1.0f,0.0f,1.0f,1.0f);  
 }

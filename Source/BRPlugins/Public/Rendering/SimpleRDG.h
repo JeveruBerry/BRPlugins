@@ -13,6 +13,16 @@ struct IPooledRenderTarget;
 
 namespace SimpleRGD
 {
+	BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FBRUniformBufferParameters, )
+		SHADER_PARAMETER(FVector4, Color1)
+		SHADER_PARAMETER(FVector4, Color2)
+		SHADER_PARAMETER(FVector4, Color3)
+		SHADER_PARAMETER(FVector4, Color4)
+		SHADER_PARAMETER(uint32, ColorIndex)
+	END_GLOBAL_SHADER_PARAMETER_STRUCT()
+
+	typedef TUniformBufferRef<FBRUniformBufferParameters> FBRUniformBufferRef;
+
 	void RDGCompute(FRHICommandListImmediate& RHIImmCmdList, FRenderTarget* RenderTarget);
 }
 
